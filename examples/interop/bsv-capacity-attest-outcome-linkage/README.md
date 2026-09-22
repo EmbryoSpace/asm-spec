@@ -95,6 +95,13 @@ holds independently. A reference implementation of the binding for this fixture'
 rail is `bindX402Receipt(...)` / `verifySettlement({ ..., expected })` in the
 producer repository; the same requirement applies to any rail's attestation.
 
+`bind.mjs` + `bind.test.mjs` here demonstrate it offline against the pinned claim
+(no network): the claim's own content-address and signature-recovery checks pass
+for any holder, binding it to the settlement the verifier paid is accepted, and a
+different settlement or an absent expected settlement is refused. Run with
+`npm test` (the demo is fully offline; only the live settlement read needs the
+network).
+
 ## Proven and not proven
 
 The test reproduces content addressing, **compact BSM signature recovery** (the
