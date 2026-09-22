@@ -67,6 +67,34 @@ pays the payee, and that an input **spends a previous output locked to the
 payer** (the prevout locking script is `P2PKH(payer)`), the BSV analog of reading
 an ERC-20 `Transfer` log.
 
+## Verifier requirements (normative)
+
+A signed, content-addressed attestation is a **bearer object**: recomputing its
+`claimId`, recovering its signer, and matching any delivered digest all hold for
+*whoever holds the record*, because none of them tie it to a particular payer. An
+attestation therefore proves that *a* payment settled and *a* response was
+delivered; it does **not**, on its own, prove the payment was **the verifier's**.
+
+To rely on a settlement attestation as evidence of its **own** paid call, a
+verifier MUST:
+
+1. **Hold the settlement reference independently.** Compare the record's
+   `settlementRef` (and, where present, the payer identity) against the
+   transaction the verifier itself paid, taken from the verifier's own context,
+   never read back out of the record being checked.
+2. **Refuse when unbound.** If no expected settlement reference is supplied, the
+   verifier MUST refuse rather than pass. An absent binding is a refusal, not a
+   skip: silence about which payment this is must not be read as "mine."
+3. **Reconcile against the chain.** Read `settlementRef` on the relevant chain and
+   confirm the movement it names (payer → payee, amount) actually occurred.
+
+This is the settlement-layer form of the general rule that the **acceptance rule
+must remain the verifier's**: adding checks does not establish that a record is the
+verifier's own unless the reference those checks run against is one the verifier
+holds independently. A reference implementation of the binding for this fixture's
+rail is `bindX402Receipt(...)` / `verifySettlement({ ..., expected })` in the
+producer repository; the same requirement applies to any rail's attestation.
+
 ## Proven and not proven
 
 The test reproduces content addressing, **compact BSM signature recovery** (the
