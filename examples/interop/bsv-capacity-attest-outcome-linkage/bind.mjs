@@ -14,10 +14,21 @@
 // case-insensitively; a base58 P2PKH address is case-SENSITIVE and compared
 // exactly (lower-casing an address would accept a different address).
 export function bindClaim(claim, expected = {}) {
-  if (!expected || typeof expected !== "object" || !expected.settlementRef) {
+  const record = value => value !== null && typeof value === "object" && !Array.isArray(value);
+  const txid = value => typeof value === "string" && /^[0-9a-fA-F]{64}$/.test(value);
+  if (!record(expected) || !Object.hasOwn(expected, "settlementRef") || !txid(expected.settlementRef)) {
     return { ok: false, reason: "unbound: verifier must supply the settlementRef it paid" };
   }
-  if (String(claim.settlementRef).toLowerCase() !== String(expected.settlementRef).toLowerCase()) {
+  if (!record(claim) || !Object.hasOwn(claim, "settlementRef") || !txid(claim.settlementRef)) {
+    return { ok: false, reason: "invalid_claim_settlementRef" };
+  }
+  for (const field of ["buyerAddress", "sellerAddress"]) {
+    if (Object.hasOwn(expected, field) &&
+        (typeof expected[field] !== "string" || expected[field].trim().length === 0)) {
+      return { ok: false, reason: `invalid_expected_${field}` };
+    }
+  }
+  if (claim.settlementRef.toLowerCase() !== expected.settlementRef.toLowerCase()) {
     return { ok: false, reason: "settlementRef_not_mine" };
   }
   if (expected.buyerAddress !== undefined && claim.buyerAddress !== expected.buyerAddress) {

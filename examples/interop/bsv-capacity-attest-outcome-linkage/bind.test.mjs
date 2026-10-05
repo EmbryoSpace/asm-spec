@@ -18,6 +18,14 @@ const claim = JSON.parse(
   await readFile(new URL("./claim_inference.json", import.meta.url), "utf8"),
 );
 
+// Separately pinned test expectations representing host-owned payment context.
+// This is a synthetic consumer context, not evidence of historical ASM use.
+const paid = Object.freeze({
+  settlementRef: "77030c6192c6e86b808f1d7afa210b874bad86ed6a6b4ef69a8ccebc51ec83c6",
+  buyerAddress: "1ErDfgzGWe6kDSHWWZPUSpVRRvfQo7rDdZ",
+  sellerAddress: "1LdqUbdZ6GY71KxThU6aKfuKXxgmTn82cv",
+});
+
 test("bearer property: the claim's own checks verify for any holder", () => {
   // No payer/verifier identity is involved here: content address + signature
   // recovery hold for a copy of the claim in anyone's hands. That is exactly why
@@ -26,7 +34,6 @@ test("bearer property: the claim's own checks verify for any holder", () => {
 });
 
 test("bound to the settlement the verifier paid: accepted", () => {
-  const paid = { settlementRef: claim.settlementRef }; // from the verifier's own context
   assert.deepEqual(bindClaim(claim, paid), { ok: true });
 });
 
@@ -41,13 +48,43 @@ test("UNBOUND (no expected settlement supplied): refused, not silently passed", 
 });
 
 test("bound with the wrong payer address (a transferred claim): refused", () => {
-  const notMine = { settlementRef: claim.settlementRef, buyerAddress: "1SomeoneElseAddressxxxxxxxxxxxxxxx" };
+  const notMine = { ...paid, buyerAddress: "1SomeoneElseAddressxxxxxxxxxxxxxxx" };
   assert.equal(bindClaim(claim, notMine).reason, "buyerAddress_not_mine");
 });
 
-test("the whole acceptance rule: verify the claim, then bind it to my payment", () => {
+test("signature and binding compose offline; settlement and delivery remain separate", () => {
   const v = verifyClaim(claim);
   assert.equal(v.ok, true);
-  const b = bindClaim(claim, { settlementRef: claim.settlementRef, buyerAddress: claim.buyerAddress });
+  const b = bindClaim(claim, paid);
   assert.equal(b.ok, true);
+});
+
+
+test("invalid inputs fail closed without coercion or crashes", () => {
+  for (const value of [undefined, null, {}, [], 123, "undefined", "", "a".repeat(63), "g".repeat(64)]) {
+    assert.equal(bindClaim(claim, { settlementRef: value }).ok, false);
+    assert.equal(bindClaim({ settlementRef: value }, paid).ok, false);
+  }
+  for (const value of [null, undefined, [], 123]) {
+    assert.equal(bindClaim(value, paid).ok, false);
+    assert.equal(bindClaim(claim, value).ok, false);
+  }
+  assert.equal(bindClaim({}, { settlementRef: "undefined" }).ok, false);
+  assert.equal(bindClaim({ settlementRef: 123 }, { settlementRef: 123 }).ok, false);
+});
+
+test("hex case is equivalent but base58 address case is not", () => {
+  assert.equal(bindClaim(claim, { ...paid, settlementRef: paid.settlementRef.toUpperCase() }).ok, true);
+  for (const field of ["buyerAddress", "sellerAddress"]) {
+    assert.equal(bindClaim(claim, { ...paid, [field]: paid[field].toLowerCase() }).ok, false);
+    for (const value of [undefined, null, "", " ", 123]) {
+      assert.equal(bindClaim(claim, { ...paid, [field]: value }).ok, false);
+    }
+  }
+});
+
+test("matching identifiers alone do not authenticate a tampered claim", () => {
+  const tampered = { ...claim, delivered: "no" };
+  assert.equal(bindClaim(tampered, paid).ok, true);
+  assert.equal(verifyClaim(tampered).ok, false);
 });

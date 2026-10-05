@@ -57,8 +57,8 @@ reads the claim from disk (a copy of the pinned claim ships here as
 CLAIM_FILE=./claim_inference.json FIXTURE_OFFLINE=1 npm test
 ```
 
-That leaves the two deterministic checks (pinned bytes + content address, and
-signature recovery) running with zero network calls. The live settlement test is
+The deterministic integrity, signature, binding, and boundary checks run with
+zero network calls. The live settlement test is
 the only networked step, so it can be kept out of required CI.
 
 The settlement test reads BSV mainnet through WhatsOnChain (with retry/backoff on
@@ -69,11 +69,11 @@ an ERC-20 `Transfer` log.
 
 ## Verifier requirements (normative)
 
-A signed, content-addressed attestation is a **bearer object**: recomputing its
-`claimId`, recovering its signer, and matching any delivered digest all hold for
-*whoever holds the record*, because none of them tie it to a particular payer. An
-attestation therefore proves that *a* payment settled and *a* response was
-delivered; it does **not**, on its own, prove the payment was **the verifier's**.
+A signed, content-addressed attestation can be copied by any holder. Its signature
+binds the statement to its signer, but does not establish that the holder paid
+for the call. Signature and content-address checks alone prove neither settlement
+nor delivery. This fixture leaves delivery and task correctness unproven even
+when the separate chain check succeeds.
 
 To rely on a settlement attestation as evidence of its **own** paid call, a
 verifier MUST:
@@ -94,6 +94,13 @@ verifier's own unless the reference those checks run against is one the verifier
 holds independently. A reference implementation of the binding for this fixture's
 rail is `bindX402Receipt(...)` / `verifySettlement({ ..., expected })` in the
 producer repository; the same requirement applies to any rail's attestation.
+
+`bindClaim` checks only equality with independently supplied expectations; it
+does not verify a signature, read the chain, validate address checksums, establish
+request identity, or prevent reuse of a settlement across multiple calls. A host
+must associate its payment with its own request and enforce any single-use rule.
+The local vendored `verifySettlement` is unchanged and does not compose this
+binding automatically. These requirements apply to this example, not MCP core.
 
 `bind.mjs` + `bind.test.mjs` here demonstrate it offline against the pinned claim
 (no network): the claim's own content-address and signature-recovery checks pass
